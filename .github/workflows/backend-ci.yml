@@ -1,0 +1,35 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [ main, backend-foundation-v0.2 ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore Nova.sln
+
+      - name: Build
+        run: dotnet build Nova.sln --configuration Release --no-restore
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t nova-backend:ci .

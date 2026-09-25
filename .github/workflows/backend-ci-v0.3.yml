@@ -1,0 +1,18 @@
+name: Backend CI
+on:
+  push:
+    branches: ["main", "backend-*"]
+  pull_request:
+    branches: ["main"]
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - run: dotnet restore Nova.sln
+      - run: dotnet build Nova.sln --configuration Release --no-restore
+      - run: dotnet test Nova.sln --configuration Release --no-build --verbosity normal
+      - run: docker build -t nova-backend:ci .
