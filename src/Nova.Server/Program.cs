@@ -15,6 +15,17 @@ using Nova.Server.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+const string NovaVersion = "1.0.0";
+
+builder.WebHost.ConfigureKestrel(options =>
+{
+    // REST messages are bounded by the endpoint itself; this is an outer guard
+    // against unexpectedly large JSON requests.
+    options.Limits.MaxRequestBodySize = 8 * 1024 * 1024;
+    options.Limits.KeepAliveTimeout = TimeSpan.FromMinutes(2);
+    options.Limits.RequestHeadersTimeout = TimeSpan.FromSeconds(30);
+});
+
 builder.Services.AddDbContext<NovaDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("NovaDatabase")
         ?? throw new InvalidOperationException("NovaDatabase connection string is missing.")));
@@ -27,23 +38,48 @@ builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 
-    options.AddFixedWindowLimiter("auth", limiter =>
-    {
-        limiter.PermitLimit = 10;
-        limiter.Window = TimeSpan.FromMinutes(1);
-        limiter.QueueLimit = 0;
-    });
+    // Partition authentication traffic by source address so one client cannot
+    // consume the entire server's authentication budget.
+    options.AddPolicy("auth", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            }));
 
-    options.AddFixedWindowLimiter("messages", limiter =>
+    // Partition message traffic by authenticated account. This keeps one noisy
+    // account from starving other users while allowing multiple devices.
+    options.AddPolicy("messages", context =>
     {
-        limiter.PermitLimit = 120;
-        limiter.Window = TimeSpan.FromMinutes(1);
-        limiter.QueueLimit = 0;
+        var userId = context.User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value
+                     ?? context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                     ?? context.Connection.RemoteIpAddress?.ToString()
+                     ?? "unknown";
+
+        return RateLimitPartition.GetFixedWindowLimiter(
+            userId,
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 120,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            });
     });
 });
 
 var jwtKey = builder.Configuration["Jwt:Key"]
     ?? throw new InvalidOperationException("Jwt:Key is missing.");
+
+if (jwtKey.Length < 32 ||
+    jwtKey.Contains("CHANGE_ME", StringComparison.OrdinalIgnoreCase) ||
+    jwtKey.Contains("replace-with", StringComparison.OrdinalIgnoreCase))
+{
+    throw new InvalidOperationException("Jwt:Key must be a strong, non-placeholder secret of at least 32 characters.");
+}
+
 var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
 
 builder.Services
@@ -67,6 +103,22 @@ builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
+app.UseExceptionHandler(errorApp =>
+{
+    errorApp.Run(async context =>
+    {
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        context.Response.ContentType = "application/problem+json";
+        await context.Response.WriteAsJsonAsync(new
+        {
+            type = "https://nova.invalid/problems/internal-server-error",
+            title = "An unexpected server error occurred.",
+            status = 500,
+            traceId = context.TraceIdentifier
+        });
+    });
+});
+
 app.UseRateLimiter();
 app.UseWebSockets();
 app.UseAuthentication();
@@ -81,12 +133,41 @@ using (var scope = app.Services.CreateScope())
     await PlatformSchema.InitializeAsync(db);
 }
 
-app.MapGet("/health", () => Results.Ok(new
+app.MapGet("/health", async (NovaDbContext db, CancellationToken ct) =>
 {
-    status = "ok",
+    var databaseAvailable = await db.Database.CanConnectAsync(ct);
+
+    return databaseAvailable
+        ? Results.Ok(new
+        {
+            status = "ok",
+            service = "nova-backend",
+            version = NovaVersion
+        })
+        : Results.Json(new
+        {
+            status = "degraded",
+            service = "nova-backend",
+            version = NovaVersion
+        }, statusCode: StatusCodes.Status503ServiceUnavailable);
+}).AllowAnonymous();
+
+app.MapGet("/health/live", () => Results.Ok(new
+{
+    status = "alive",
     service = "nova-backend",
-    version = "0.2.0"
-}));
+    version = NovaVersion
+})).AllowAnonymous();
+
+app.MapGet("/health/ready", async (NovaDbContext db, CancellationToken ct) =>
+{
+    var databaseAvailable = await db.Database.CanConnectAsync(ct);
+
+    return databaseAvailable
+        ? Results.Ok(new { status = "ready", service = "nova-backend", version = NovaVersion })
+        : Results.Json(new { status = "not_ready", service = "nova-backend", version = NovaVersion },
+            statusCode: StatusCodes.Status503ServiceUnavailable);
+}).AllowAnonymous();
 
 app.MapPost("/api/v1/auth/register", async (
     RegisterRequest request,
@@ -104,8 +185,8 @@ app.MapPost("/api/v1/auth/register", async (
     if (displayName.Length > 64)
         return Results.BadRequest(new { error = "Display name must be 64 characters or fewer." });
 
-    if (request.Password.Length < 12)
-        return Results.BadRequest(new { error = "Password must be at least 12 characters." });
+    if (request.Password.Length is < 12 or > 1024)
+        return Results.BadRequest(new { error = "Password must be between 12 and 1024 characters." });
 
     if (await db.Users.AnyAsync(x => x.Username.ToLower() == username.ToLower()))
         return Results.Conflict(new { error = "Username is already taken." });
@@ -190,8 +271,8 @@ app.MapPost("/api/v1/auth/refresh", async (
     NovaDbContext db,
     TokenService tokens) =>
 {
-    if (string.IsNullOrWhiteSpace(request.RefreshToken))
-        return Results.BadRequest(new { error = "Refresh token is required." });
+    if (string.IsNullOrWhiteSpace(request.RefreshToken) || request.RefreshToken.Length > 512)
+        return Results.BadRequest(new { error = "Refresh token is invalid." });
 
     var hash = TokenService.HashRefreshToken(request.RefreshToken);
     var session = await db.RefreshSessions
@@ -779,6 +860,7 @@ app.Map("/ws", async context =>
 
     using var socket = await context.WebSockets.AcceptWebSocketAsync();
     var connections = context.RequestServices.GetRequiredService<ConnectionManager>();
+    var db = context.RequestServices.GetRequiredService<NovaDbContext>();
 
     Guid? userId = null;
 
@@ -813,8 +895,30 @@ app.Map("/ws", async context =>
                     break;
                 }
 
+                var deviceIdClaim = principal?.FindFirstValue("device_id");
+                if (!Guid.TryParse(deviceIdClaim, out var deviceId))
+                {
+                    await socket.CloseAsync(WebSocketCloseStatus.PolicyViolation, "Invalid device", context.RequestAborted);
+                    break;
+                }
+
+                var deviceActive = await db.Devices.AnyAsync(
+                    x => x.Id == deviceId && x.UserId == parsedUserId && x.RevokedAt == null,
+                    context.RequestAborted);
+
+                if (!deviceActive)
+                {
+                    await socket.CloseAsync(WebSocketCloseStatus.PolicyViolation, "Device revoked", context.RequestAborted);
+                    break;
+                }
+
                 userId = parsedUserId;
                 connections.Add(userId.Value, socket);
+
+                await db.Devices
+                    .Where(x => x.Id == deviceId)
+                    .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.LastSeenAt, DateTimeOffset.UtcNow),
+                        context.RequestAborted);
 
                 await SendAsync(socket, new { type = "ready", userId }, context.RequestAborted);
                 continue;
@@ -836,6 +940,14 @@ app.Map("/ws", async context =>
         try
         {
             await socket.CloseAsync(WebSocketCloseStatus.InvalidPayloadData, "Invalid JSON", CancellationToken.None);
+        }
+        catch { }
+    }
+    catch (InvalidOperationException ex) when (ex.Message.Contains("too large", StringComparison.OrdinalIgnoreCase))
+    {
+        try
+        {
+            await socket.CloseAsync(WebSocketCloseStatus.MessageTooBig, "Message too large", CancellationToken.None);
         }
         catch { }
     }
