@@ -32,6 +32,7 @@ public sealed class NovaDbContext(DbContextOptions<NovaDbContext> options) : DbC
         {
             entity.HasKey(x => x.Id);
             entity.HasIndex(x => new { x.ConversationId, x.CreatedAt });
+            entity.HasIndex(x => new { x.SenderId, x.ClientMessageId }).IsUnique();
             entity.Property(x => x.Ciphertext).IsRequired();
             entity.Property(x => x.Nonce).HasMaxLength(256).IsRequired();
             entity.Property(x => x.EncryptionVersion).IsRequired();
