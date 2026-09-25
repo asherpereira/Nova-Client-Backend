@@ -15,6 +15,7 @@ public sealed class NovaDbContext(DbContextOptions<NovaDbContext> options) : DbC
     public DbSet<Channel> Channels => Set<Channel>();
     public DbSet<Device> Devices => Set<Device>();
     public DbSet<RefreshSession> RefreshSessions => Set<RefreshSession>();
+    public DbSet<ServerMemberRole> ServerMemberRoles => Set<ServerMemberRole>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -92,6 +93,15 @@ public sealed class NovaDbContext(DbContextOptions<NovaDbContext> options) : DbC
                 .HasForeignKey(x => x.ServerId).OnDelete(DeleteBehavior.Cascade);
             entity.HasOne<Channel>().WithMany()
                 .HasForeignKey(x => x.ParentChannelId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<ServerMemberRole>(entity =>
+        {
+            entity.HasKey(x => new { x.ServerId, x.UserId, x.RoleId });
+            entity.HasOne(x => x.ServerMember).WithMany()
+                .HasForeignKey(x => new { x.ServerId, x.UserId }).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(x => x.Role).WithMany()
+                .HasForeignKey(x => x.RoleId).OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<Device>(entity =>
