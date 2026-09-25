@@ -974,7 +974,14 @@ app.Run();
 
 static bool TryGetUserId(ClaimsPrincipal principal, out Guid userId)
 {
-    return Guid.TryParse(principal.FindFirstValue(JwtRegisteredClaimNames.Sub), out userId);
+    // JwtBearer maps the standard "sub" claim to ClaimTypes.NameIdentifier
+    // by default. Accept both mapped and raw forms so HTTP auth and the
+    // WebSocket gateway resolve the same authenticated user consistently.
+    var subject = principal.FindFirstValue(ClaimTypes.NameIdentifier)
+        ?? principal.FindFirstValue(JwtRegisteredClaimNames.Sub)
+        ?? principal.FindFirst("sub")?.Value;
+
+    return Guid.TryParse(subject, out userId);
 }
 
 static async Task<string?> ReceiveTextAsync(WebSocket socket, CancellationToken cancellationToken)
