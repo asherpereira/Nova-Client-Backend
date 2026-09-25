@@ -71,6 +71,13 @@ public static class SchemaInitializer
             "UpdatedAt" timestamptz NOT NULL
         );
 
+        CREATE TABLE IF NOT EXISTS "ServerMemberRoles" (
+            "ServerId" uuid NOT NULL,
+            "UserId" uuid NOT NULL,
+            "RoleId" uuid NOT NULL,
+            PRIMARY KEY ("ServerId", "UserId", "RoleId")
+        );
+
         CREATE TABLE IF NOT EXISTS "Devices" (
             "Id" uuid PRIMARY KEY,
             "UserId" uuid NOT NULL,
@@ -99,6 +106,9 @@ public static class SchemaInitializer
             ON "ConversationMembers" ("UserId", "ConversationId");
         CREATE INDEX IF NOT EXISTS "IX_ServerMembers_UserId"
             ON "ServerMembers" ("UserId");
+        CREATE INDEX IF NOT EXISTS "IX_ServerMemberRoles_RoleId"
+            ON "ServerMemberRoles" ("RoleId");
+
         CREATE INDEX IF NOT EXISTS "IX_Roles_ServerId_Position"
             ON "Roles" ("ServerId", "Position");
         CREATE INDEX IF NOT EXISTS "IX_Channels_ServerId_Position"
@@ -124,6 +134,12 @@ public static class SchemaInitializer
         ALTER TABLE "Channels"
             ADD CONSTRAINT "FK_Channels_Servers"
             FOREIGN KEY ("ServerId") REFERENCES "Servers" ("Id") ON DELETE CASCADE;
+        ALTER TABLE "ServerMemberRoles"
+            ADD CONSTRAINT "FK_ServerMemberRoles_ServerMembers"
+            FOREIGN KEY ("ServerId", "UserId") REFERENCES "ServerMembers" ("ServerId", "UserId") ON DELETE CASCADE;
+        ALTER TABLE "ServerMemberRoles"
+            ADD CONSTRAINT "FK_ServerMemberRoles_Roles"
+            FOREIGN KEY ("RoleId") REFERENCES "Roles" ("Id") ON DELETE CASCADE;
         ALTER TABLE "Devices"
             ADD CONSTRAINT "FK_Devices_Users"
             FOREIGN KEY ("UserId") REFERENCES "Users" ("Id") ON DELETE CASCADE;
