@@ -11,6 +11,9 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       ConnectionStrings__NovaDatabase: Host=postgres;Port=5432;Database=nova;Username=nova;Password=${NOVA_DB_PASSWORD:?NOVA_DB_PASSWORD must be set}
       Jwt__Key: ${NOVA_JWT_KEY:?NOVA_JWT_KEY must be set}
+      Storage__LocalPath: /data/nova/uploads
+    volumes:
+      - nova-upload-data:/data/nova/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -33,3 +36,4 @@ services:
 
 volumes:
   nova-postgres-data:
+  nova-upload-data:
