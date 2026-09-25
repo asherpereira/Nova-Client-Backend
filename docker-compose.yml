@@ -3,12 +3,14 @@ services:
     build: .
     container_name: nova-backend
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
     ports:
       - "${NOVA_HTTP_PORT:-8080}:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: Production
-      ConnectionStrings__NovaDatabase: Host=postgres;Port=5432;Database=nova;Username=nova;Password=${NOVA_DB_PASSWORD}
-      Jwt__Key: ${NOVA_JWT_KEY}
+      ConnectionStrings__NovaDatabase: Host=postgres;Port=5432;Database=nova;Username=nova;Password=${NOVA_DB_PASSWORD:?NOVA_DB_PASSWORD must be set}
+      Jwt__Key: ${NOVA_JWT_KEY:?NOVA_JWT_KEY must be set}
     depends_on:
       postgres:
         condition: service_healthy
