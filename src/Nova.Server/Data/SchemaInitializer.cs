@@ -11,6 +11,10 @@ public static class SchemaInitializer
         // Development-safe additive bootstrap. This keeps existing 0.1 development
         // databases usable while we move toward versioned EF migrations.
         const string sql = """
+        ALTER TABLE "Messages" ADD COLUMN IF NOT EXISTS "ClientMessageId" uuid;
+        CREATE UNIQUE INDEX IF NOT EXISTS "IX_Messages_SenderId_ClientMessageId"
+            ON "Messages" ("SenderId", "ClientMessageId") WHERE "ClientMessageId" IS NOT NULL;
+
         CREATE TABLE IF NOT EXISTS "Conversations" (
             "Id" uuid PRIMARY KEY,
             "Type" integer NOT NULL,
