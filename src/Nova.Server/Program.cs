@@ -69,6 +69,7 @@ app.UseRateLimiter();
 app.UseWebSockets();
 app.UseAuthentication();
 app.UseAuthorization();
+app.MapPlatformEndpoints();
 
 using (var scope = app.Services.CreateScope())
 {
