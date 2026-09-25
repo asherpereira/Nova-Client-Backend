@@ -27,6 +27,7 @@ public sealed class NovaDbContext(DbContextOptions<NovaDbContext> options) : DbC
     public DbSet<ServerBan> ServerBans => Set<ServerBan>();
     public DbSet<ChannelPermissionOverride> ChannelPermissionOverrides => Set<ChannelPermissionOverride>();
     public DbSet<Attachment> Attachments => Set<Attachment>();
+    public DbSet<UploadSession> UploadSessions => Set<UploadSession>();
     public DbSet<Presence> Presences => Set<Presence>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<ModerationReport> ModerationReports => Set<ModerationReport>();
@@ -64,6 +65,7 @@ public sealed class NovaDbContext(DbContextOptions<NovaDbContext> options) : DbC
         modelBuilder.Entity<ServerBan>(e => { e.HasKey(x=>x.Id); e.HasIndex(x=>new{x.ServerId,x.UserId}).IsUnique(); });
         modelBuilder.Entity<ChannelPermissionOverride>(e => { e.HasKey(x=>x.Id); e.HasIndex(x=>x.ChannelId); });
         modelBuilder.Entity<Attachment>(e => { e.HasKey(x=>x.Id); e.HasIndex(x=>new{x.OwnerId,x.CreatedAt}); e.Property(x=>x.FileName).HasMaxLength(512).IsRequired(); e.Property(x=>x.ContentType).HasMaxLength(256).IsRequired(); e.Property(x=>x.StorageKey).HasMaxLength(2048).IsRequired(); });
+        modelBuilder.Entity<UploadSession>(e => { e.HasKey(x=>x.Id); e.HasIndex(x=>new{x.OwnerId,x.CreatedAt}); e.Property(x=>x.FileName).HasMaxLength(512).IsRequired(); e.Property(x=>x.ContentType).HasMaxLength(256).IsRequired(); e.Property(x=>x.StorageKey).HasMaxLength(2048).IsRequired(); });
         modelBuilder.Entity<Presence>(e => { e.HasKey(x=>x.UserId); e.Property(x=>x.Status).HasMaxLength(32).IsRequired(); });
         modelBuilder.Entity<Notification>(e => { e.HasKey(x=>x.Id); e.HasIndex(x=>new{x.UserId,x.Read,x.CreatedAt}); });
         modelBuilder.Entity<ModerationReport>(e => { e.HasKey(x=>x.Id); e.HasIndex(x=>new{x.Status,x.CreatedAt}); e.Property(x=>x.Reason).HasMaxLength(512).IsRequired(); });
