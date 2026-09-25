@@ -70,6 +70,7 @@ app.UseWebSockets();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapPlatformEndpoints();
+app.MapIntegrationEndpoints();
 
 using (var scope = app.Services.CreateScope())
 {
