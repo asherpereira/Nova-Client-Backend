@@ -112,6 +112,7 @@ builder.Services
     });
 
 builder.Services.AddAuthorization();
+builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
@@ -138,6 +139,7 @@ app.UseAuthorization();
 app.MapPlatformEndpoints();
 app.MapIntegrationEndpoints();
 app.MapStorageEndpoints();
+app.MapOpenApi("/openapi/{documentName}/openapi.json");
 
 using (var scope = app.Services.CreateScope())
 {
