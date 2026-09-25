@@ -75,6 +75,7 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<NovaDbContext>();
     await SchemaInitializer.InitializeAsync(db);
+    await PlatformSchema.InitializeAsync(db);
 }
 
 app.MapGet("/health", () => Results.Ok(new
