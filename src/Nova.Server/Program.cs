@@ -15,13 +15,11 @@ using Nova.Server.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-const string NovaVersion = "1.0.0";
+const string NovaVersion = "1.1.0";
 
 builder.WebHost.ConfigureKestrel(options =>
 {
-    // REST messages are bounded by the endpoint itself; this is an outer guard
-    // against unexpectedly large JSON requests.
-    options.Limits.MaxRequestBodySize = 8 * 1024 * 1024;
+    options.Limits.MaxRequestBodySize = 2L * 1024 * 1024 * 1024;
     options.Limits.KeepAliveTimeout = TimeSpan.FromMinutes(2);
     options.Limits.RequestHeadersTimeout = TimeSpan.FromSeconds(30);
 });
@@ -33,13 +31,12 @@ builder.Services.AddDbContext<NovaDbContext>(options =>
 builder.Services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
 builder.Services.AddSingleton<TokenService>();
 builder.Services.AddSingleton<ConnectionManager>();
+builder.Services.AddSingleton<IObjectStorage, LocalObjectStorage>();
 
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 
-    // Partition authentication traffic by source address so one client cannot
-    // consume the entire server's authentication budget.
     options.AddPolicy("auth", context =>
         RateLimitPartition.GetFixedWindowLimiter(
             context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
@@ -50,9 +47,24 @@ builder.Services.AddRateLimiter(options =>
                 QueueLimit = 0
             }));
 
-    // Partition message traffic by authenticated account. This keeps one noisy
-    // account from starving other users while allowing multiple devices.
     options.AddPolicy("messages", context =>
+    {
+        var userId = context.User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value
+                     ?? context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                     ?? context.Connection.RemoteIpAddress?.ToString()
+                     ?? "unknown";
+
+        return RateLimitPartition.GetFixedWindowLimiter(
+            userId,
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 120,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            });
+    });
+
+    options.AddPolicy("uploads", context =>
     {
         var userId = context.User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value
                      ?? context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
@@ -125,6 +137,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapPlatformEndpoints();
 app.MapIntegrationEndpoints();
+app.MapStorageEndpoints();
 
 using (var scope = app.Services.CreateScope())
 {
@@ -138,18 +151,9 @@ app.MapGet("/health", async (NovaDbContext db, CancellationToken ct) =>
     var databaseAvailable = await db.Database.CanConnectAsync(ct);
 
     return databaseAvailable
-        ? Results.Ok(new
-        {
-            status = "ok",
-            service = "nova-backend",
-            version = NovaVersion
-        })
-        : Results.Json(new
-        {
-            status = "degraded",
-            service = "nova-backend",
-            version = NovaVersion
-        }, statusCode: StatusCodes.Status503ServiceUnavailable);
+        ? Results.Ok(new { status = "ok", service = "nova-backend", version = NovaVersion })
+        : Results.Json(new { status = "degraded", service = "nova-backend", version = NovaVersion },
+            statusCode: StatusCodes.Status503ServiceUnavailable);
 }).AllowAnonymous();
 
 app.MapGet("/health/live", () => Results.Ok(new
