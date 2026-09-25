@@ -121,137 +121,148 @@ public static class SchemaInitializer
             ON "RefreshSessions" ("TokenHash");
 
         DO $$
-BEGIN
-    IF NOT EXISTS (
+        BEGIN
+            IF NOT EXISTS (
         SELECT 1 FROM pg_constraint WHERE conname = 'FK_ConversationMembers_Conversations'
-    ) THEN
+            ) THEN
         ALTER TABLE "ConversationMembers"
             ADD CONSTRAINT "FK_ConversationMembers_Conversations"
             FOREIGN KEY ("ConversationId")
             REFERENCES "Conversations" ("Id")
             ON DELETE CASCADE;
-    END IF;
-END $$;
+            END IF;
+        
+        END $$;
         DO $$
-BEGIN
-    IF NOT EXISTS (
+        BEGIN
+            IF NOT EXISTS (
         SELECT 1 FROM pg_constraint WHERE conname = 'FK_ConversationMembers_Users'
-    ) THEN
+            ) THEN
         ALTER TABLE "ConversationMembers"
             ADD CONSTRAINT "FK_ConversationMembers_Users"
             FOREIGN KEY ("UserId")
             REFERENCES "Users" ("Id")
             ON DELETE CASCADE;
-    END IF;
-END $$;
+            END IF;
+        
+        END $$;
         DO $$
-BEGIN
-    IF NOT EXISTS (
+        BEGIN
+            IF NOT EXISTS (
         SELECT 1 FROM pg_constraint WHERE conname = 'FK_ServerMembers_Servers'
-    ) THEN
+            ) THEN
         ALTER TABLE "ServerMembers"
             ADD CONSTRAINT "FK_ServerMembers_Servers"
             FOREIGN KEY ("ServerId")
             REFERENCES "Servers" ("Id")
             ON DELETE CASCADE;
-    END IF;
-END $$;
+            END IF;
+        
+        END $$;
         DO $$
-BEGIN
-    IF NOT EXISTS (
+        BEGIN
+            IF NOT EXISTS (
         SELECT 1 FROM pg_constraint WHERE conname = 'FK_ServerMembers_Users'
-    ) THEN
+            ) THEN
         ALTER TABLE "ServerMembers"
             ADD CONSTRAINT "FK_ServerMembers_Users"
             FOREIGN KEY ("UserId")
             REFERENCES "Users" ("Id")
             ON DELETE CASCADE;
-    END IF;
-END $$;
+            END IF;
+        
+        END $$;
         DO $$
-BEGIN
-    IF NOT EXISTS (
+        BEGIN
+            IF NOT EXISTS (
         SELECT 1 FROM pg_constraint WHERE conname = 'FK_Roles_Servers'
-    ) THEN
+            ) THEN
         ALTER TABLE "Roles"
             ADD CONSTRAINT "FK_Roles_Servers"
             FOREIGN KEY ("ServerId")
             REFERENCES "Servers" ("Id")
             ON DELETE CASCADE;
-    END IF;
-END $$;
+            END IF;
+        
+        END $$;
         DO $$
-BEGIN
-    IF NOT EXISTS (
+        BEGIN
+            IF NOT EXISTS (
         SELECT 1 FROM pg_constraint WHERE conname = 'FK_Channels_Servers'
-    ) THEN
+            ) THEN
         ALTER TABLE "Channels"
             ADD CONSTRAINT "FK_Channels_Servers"
             FOREIGN KEY ("ServerId")
             REFERENCES "Servers" ("Id")
             ON DELETE CASCADE;
-    END IF;
-END $$;
+            END IF;
+        
+        END $$;
         DO $$
-BEGIN
-    IF NOT EXISTS (
+        BEGIN
+            IF NOT EXISTS (
         SELECT 1 FROM pg_constraint WHERE conname = 'FK_ServerMemberRoles_ServerMembers'
-    ) THEN
+            ) THEN
         ALTER TABLE "ServerMemberRoles"
             ADD CONSTRAINT "FK_ServerMemberRoles_ServerMembers"
             FOREIGN KEY ("ServerId", "UserId")
             REFERENCES "ServerMembers" ("ServerId", "UserId")
             ON DELETE CASCADE;
-    END IF;
-END $$;
+            END IF;
+        
+        END $$;
         DO $$
-BEGIN
-    IF NOT EXISTS (
+        BEGIN
+            IF NOT EXISTS (
         SELECT 1 FROM pg_constraint WHERE conname = 'FK_ServerMemberRoles_Roles'
-    ) THEN
+            ) THEN
         ALTER TABLE "ServerMemberRoles"
             ADD CONSTRAINT "FK_ServerMemberRoles_Roles"
             FOREIGN KEY ("RoleId")
             REFERENCES "Roles" ("Id")
             ON DELETE CASCADE;
-    END IF;
-END $$;
+            END IF;
+        
+        END $$;
         DO $$
-BEGIN
-    IF NOT EXISTS (
+        BEGIN
+            IF NOT EXISTS (
         SELECT 1 FROM pg_constraint WHERE conname = 'FK_Devices_Users'
-    ) THEN
+            ) THEN
         ALTER TABLE "Devices"
             ADD CONSTRAINT "FK_Devices_Users"
             FOREIGN KEY ("UserId")
             REFERENCES "Users" ("Id")
             ON DELETE CASCADE;
-    END IF;
-END $$;
+            END IF;
+        
+        END $$;
         DO $$
-BEGIN
-    IF NOT EXISTS (
+        BEGIN
+            IF NOT EXISTS (
         SELECT 1 FROM pg_constraint WHERE conname = 'FK_RefreshSessions_Users'
-    ) THEN
+            ) THEN
         ALTER TABLE "RefreshSessions"
             ADD CONSTRAINT "FK_RefreshSessions_Users"
             FOREIGN KEY ("UserId")
             REFERENCES "Users" ("Id")
             ON DELETE CASCADE;
-    END IF;
-END $$;
+            END IF;
+        
+        END $$;
         DO $$
-BEGIN
-    IF NOT EXISTS (
+        BEGIN
+            IF NOT EXISTS (
         SELECT 1 FROM pg_constraint WHERE conname = 'FK_RefreshSessions_Devices'
-    ) THEN
+            ) THEN
         ALTER TABLE "RefreshSessions"
             ADD CONSTRAINT "FK_RefreshSessions_Devices"
             FOREIGN KEY ("DeviceId")
             REFERENCES "Devices" ("Id")
             ON DELETE CASCADE;
-    END IF;
-END $$;
+            END IF;
+        
+        END $$;
         """;
 
         // Every statement is idempotent. Startup must be safe on both a fresh
